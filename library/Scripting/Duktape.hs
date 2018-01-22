@@ -142,11 +142,11 @@ class Duktapeable ξ where
   runInDuktape ∷ Int → ξ → Ptr DuktapeHeap → IO CInt
   argCount ∷ ξ → Int
 
-instance Duktapeable (IO ()) where
+instance {-# OVERLAPS #-} Duktapeable (IO ()) where
   runInDuktape _ f _ = f >> return 0
   argCount _ = 0
 
-instance (ToJSON v) => Duktapeable (IO v) where
+instance {-# OVERLAPPABLE #-} (ToJSON v) => Duktapeable (IO v) where
   runInDuktape _ f ctxPtr = f >>= pushValue ctxPtr . toJSON >> return 1
   argCount _ = 0
 

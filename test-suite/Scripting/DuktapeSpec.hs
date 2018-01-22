@@ -84,7 +84,9 @@ function objTest (obj) { return obj.name + obj.stuff.filter(function (x) { retur
       let dbl x = return $ Number $ x * 2 ∷ IO Value
           add x y = return $ x + y ∷ IO Integer
           cnst = return $ 123 ∷ IO Integer
+          noop = return () ∷ IO ()
       _ ← exposeFnDuktape (fromJust ctx) Nothing "double" dbl
+      _ ← exposeFnDuktape (fromJust ctx) Nothing "noop" noop
       _ ← exposeFnDuktape (fromJust ctx) (Just "X") "cnst" cnst
       _ ← exposeFnDuktape (fromJust ctx) (Just "X") "add" add
       rd ← evalDuktape (fromJust ctx) "double(7) + X.cnst() + X.add(3,5)"
@@ -95,3 +97,5 @@ function objTest (obj) { return obj.name + obj.stuff.filter(function (x) { retur
       rE `shouldBe` (Left "TypeError: error (rc -6)")
       rF ← evalDuktape (fromJust ctx) "try { X.add(undefined, \"wtf\") } catch (e) { 0; }"
       rF `shouldBe` (Right $ Just $ Number 0)
+      rF ← evalDuktape (fromJust ctx) "noop()"
+      rF `shouldBe` (Right $ Nothing)
