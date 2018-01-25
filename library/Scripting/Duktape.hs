@@ -103,10 +103,15 @@ pushValue ctxPtr (Object m) = do
     BS.useAsCString (encodeUtf8 k) $ \kCstr →
       pushValue ctxPtr x >> c_duk_put_prop_string ctxPtr idx kCstr
 
-pushObjectOrGlobal ∷ Ptr DuktapeHeap → Maybe BS.ByteString → IO Bool
-pushObjectOrGlobal ctxPtr (Just on) = liftM (/= 0) $ BS.useAsCString on $ \onameCstr → c_duk_get_global_string ctxPtr onameCstr
-pushObjectOrGlobal ctxPtr Nothing   = c_duk_push_global_object ctxPtr >> return True
-
+pushNestedObjectOrGlobal ∷ Ptr DuktapeHeap → [BS.ByteString] → IO Bool
+pushNestedObjectOrGlobal ctxPtr objs = c_duk_push_global_object ctxPtr >> walk ctxPtr objs
+  where
+    walk _ [] = return True
+    walk ctx (x:xs) = do
+      step <- BS.useAsCString x (c_duk_get_prop_string ctx (-1))
+      if step /= 0
+        then walk ctx xs
+        else return False
 -- | Creates a Duktape context.
 createDuktapeCtx ∷ MonadIO μ ⇒ μ (Maybe DuktapeCtx)
 createDuktapeCtx = liftIO $ createHeapF nullFunPtr
@@ -123,20 +128,20 @@ evalDuktape ctx src =
 
 -- | Calls an ECMAScript function on a given Duktape context, passing in arguments from the Haskell world.
 callDuktape ∷ MonadIO μ ⇒ DuktapeCtx
-                        → Maybe BS.ByteString -- ^ The name of the object that contains the function (Nothing is the global object)
+                        → [BS.ByteString] -- ^ Nested list of object names that contain the function (Empty is the global object)
                         → BS.ByteString -- ^ The function name
                         → [Value] -- ^ The arguments
                         → μ (Either String (Maybe Value))
 callDuktape ctx oname fname args =
   liftIO $ withCtx ctx $ \ctxPtr →
     BS.useAsCStringLen fname $ \(fnameCstr, fnameLen) → do
-      oVal ← pushObjectOrGlobal ctxPtr oname
+      oVal ← pushNestedObjectOrGlobal ctxPtr oname
       if oVal
          then do
            void $ c_duk_push_lstring ctxPtr fnameCstr $ fromIntegral fnameLen
            forM_ args $ pushValue ctxPtr
            pop ctxPtr =<< pop ctxPtr =<< getValueOrError ctxPtr =<< c_duk_pcall_prop ctxPtr (fromIntegral $ -2 - length args) (fromIntegral $ length args)
-         else pop ctxPtr $ Left $ "Nonexistent property of global object: " ++ show (fromMaybe "" oname)
+         else pop ctxPtr $ Left $ "Nonexistent property of global object: " ++ show oname
 
 class Duktapeable ξ where
   runInDuktape ∷ Int → ξ → Ptr DuktapeHeap → IO CInt
@@ -161,14 +166,14 @@ instance (Duktapeable ξ, FromJSON v) => Duktapeable (v -> ξ) where
 -- | Makes a Haskell function available in ECMAScript.
 exposeFnDuktape ∷ (MonadIO μ, Duktapeable ξ)
                 ⇒ DuktapeCtx
-                → Maybe BS.ByteString -- ^ The name of the object that will contain the function (Nothing is the global object)
+                → [BS.ByteString] -- ^ The name of the object that will contain the function (Nothing is the global object)
                 → BS.ByteString -- ^ The function name
                 → ξ -- ^ The function itself
                 → μ (Either String ())
 exposeFnDuktape ctx oname fname f =
   liftIO $ withCtx ctx $ \ctxPtr →
     BS.useAsCString fname $ \fnameCstr → do
-      oVal ← pushObjectOrGlobal ctxPtr oname
+      oVal ← pushNestedObjectOrGlobal ctxPtr oname
       if oVal
          then do
            wrapped ← c_wrapper $ runInDuktape 0 f

@@ -67,6 +67,9 @@ foreign import capi safe "duktape.h duk_put_prop_index"
 foreign import capi safe "duktape.h duk_put_prop_string"
   c_duk_put_prop_string ∷ Ptr DuktapeHeap → CInt → CString → IO CInt
 
+foreign import capi safe "duktape.h duk_get_prop_string"
+  c_duk_get_prop_string ∷ Ptr DuktapeHeap → CInt → CString → IO CInt
+
 -- Pushing to the stack
 
 foreign import capi safe "duktape.h duk_push_string"

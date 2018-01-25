@@ -38,11 +38,11 @@ spec = do
 function returnsObj () { return {hello: {from: [1, 2, 3]}} }
 function throwsErr () { throw new Error('hi') }
 |]
-      rE ← callDuktape (fromJust ctx) Nothing "n0thing!" []
+      rE ← callDuktape (fromJust ctx) [] "n0thing!" []
       rE `shouldBe` (Left "TypeError: undefined not callable (property 'n0thing!' of [object global])")
-      rO ← callDuktape (fromJust ctx) Nothing "returnsObj" []
+      rO ← callDuktape (fromJust ctx) [] "returnsObj" []
       rO `shouldBe` (Right $ Just [json|{"hello": {"from": [1, 2, 3]}}|])
-      rT ← callDuktape (fromJust ctx) Nothing "throwsErr" []
+      rT ← callDuktape (fromJust ctx) [] "throwsErr" []
       rT `shouldBe` (Left "Error: hi")
 
     it "calls ECMAScript functions on objects" $ do
@@ -51,10 +51,10 @@ function throwsErr () { throw new Error('hi') }
 var Stuff = { x: 'testFromThis' }
 Stuff.fun = function () { return this.x }
 |]
-      rS ← callDuktape (fromJust ctx) (Just "Stuff") "fun" []
+      rS ← callDuktape (fromJust ctx) ["Stuff"] "fun" []
       rS `shouldBe` (Right $ Just $ String "testFromThis")
-      rE ← callDuktape (fromJust ctx) (Just "failNonExistent") "fun" []
-      rE `shouldBe` (Left "Nonexistent property of global object: \"failNonExistent\"")
+      rE ← callDuktape (fromJust ctx) ["failNonExistent"] "fun" []
+      rE `shouldBe` (Left "Nonexistent property of global object: [\"failNonExistent\"]")
 
     it "calls ECMAScript functions with args" $ do
       ctx ← createDuktapeCtx
@@ -66,15 +66,15 @@ function arrTest (a) { return a.map(function (el) { return typeof(el) }).join(''
 function objTest (obj) { return obj.name + obj.stuff.filter(function (x) { return x != null && (typeof(x) == 'string' || typeof(x) == 'object') })
                                                     .map(function(x) { return typeof(x) == 'object' ? x.value : x } ).join('') }
 |]
-      rN ← callDuktape (fromJust ctx) Nothing "double" [Number 7, Number 8]
+      rN ← callDuktape (fromJust ctx) [] "double" [Number 7, Number 8]
       rN `shouldBe` (Right $ Just $ Number 30)
-      rS ← callDuktape (fromJust ctx) Nothing "awesomeString" [String "hello"]
+      rS ← callDuktape (fromJust ctx) [] "awesomeString" [String "hello"]
       rS `shouldBe` (Right $ Just $ String "-= hello =-")
-      rB ← callDuktape (fromJust ctx) Nothing "boolTest" [Bool True, Bool True, Bool False]
+      rB ← callDuktape (fromJust ctx) [] "boolTest" [Bool True, Bool True, Bool False]
       rB `shouldBe` (Right $ Just $ Bool True)
-      rA ← callDuktape (fromJust ctx) Nothing "arrTest" [[json|[1, 2, "test", null]|]]
+      rA ← callDuktape (fromJust ctx) [] "arrTest" [[json|[1, 2, "test", null]|]]
       rA `shouldBe` (Right $ Just $ String "numbernumberstringobject")
-      rO ← callDuktape (fromJust ctx) Nothing "objTest" [[json|{"stuff": [1, 2, "hello", null, {"value": "world"}], "name": "test"}|]]
+      rO ← callDuktape (fromJust ctx) [] "objTest" [[json|{"stuff": [1, 2, "hello", null, {"value": "world"}], "name": "test"}|]]
       rO `shouldBe` (Right $ Just $ String "testhelloworld")
 
   describe "exposeFnDuktape" $ do
@@ -85,17 +85,17 @@ function objTest (obj) { return obj.name + obj.stuff.filter(function (x) { retur
           add x y = return $ x + y ∷ IO Integer
           cnst = return $ 123 ∷ IO Integer
           noop = return () ∷ IO ()
-      _ ← exposeFnDuktape (fromJust ctx) Nothing "double" dbl
-      _ ← exposeFnDuktape (fromJust ctx) Nothing "noop" noop
-      _ ← exposeFnDuktape (fromJust ctx) (Just "X") "cnst" cnst
-      _ ← exposeFnDuktape (fromJust ctx) (Just "X") "add" add
+      _ ← exposeFnDuktape (fromJust ctx) [] "double" dbl
+      _ ← exposeFnDuktape (fromJust ctx) [] "noop" noop
+      _ ← exposeFnDuktape (fromJust ctx) ["X"] "cnst" cnst
+      _ ← exposeFnDuktape (fromJust ctx) ["X"] "add" add
       rd ← evalDuktape (fromJust ctx) "double(7) + X.cnst() + X.add(3,5)"
       rd `shouldBe` (Right $ Just $ Number 145)
-      rD ← callDuktape (fromJust ctx) Nothing "double" [Number 7]
+      rD ← callDuktape (fromJust ctx) [] "double" [Number 7]
       rD `shouldBe` (Right $ Just $ Number 14)
-      rE ← callDuktape (fromJust ctx) Nothing "double" []
+      rE ← callDuktape (fromJust ctx) [] "double" []
       rE `shouldBe` (Left "TypeError: error (rc -6)")
       rF ← evalDuktape (fromJust ctx) "try { X.add(undefined, \"wtf\") } catch (e) { 0; }"
       rF `shouldBe` (Right $ Just $ Number 0)
-      rF ← evalDuktape (fromJust ctx) "noop()"
-      rF `shouldBe` (Right $ Nothing)
+      rG ← evalDuktape (fromJust ctx) "noop()"
+      rG `shouldBe` (Right $ Nothing)
